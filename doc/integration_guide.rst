@@ -17,19 +17,23 @@ Quick-Start
 
 After downloading, to understand more about the NVDLA design, you can try out the following:
 
-1) Run a simulation using the included testbench.  A number of sanity 
+1) Set up the Linux environment with required tools.  Review :ref:`env_setup`
+
+2) Select a configuration and build the hardware tree.  Review :ref:`tree_build`
+
+3) Run a simulation using the included testbench.  A number of sanity 
    tests are included in the repository.  See :ref:`simulation_testbench`
  
-2) Synthesize the design to review area and timing in your 
+4) Synthesize the design to review area and timing in your 
    library.  See :ref:`synthesis`.  You will need to map RAM's 
    to your RAM library.  See :ref:`memories_sram`.  And update timing contraints 
    as appropriate for your technology.
 
-3) Open up the :ref:`performance_model` spreadsheet to look at 
+5) Open up the :ref:`performance_model` spreadsheet to look at 
    performance with different NVDLA configurations.  Configurable RTL
    is on the :doc:`roadmap`.
 
-4) Integrate the NVDLA RTL into your SoC.  The sanity tests that are run in the stand-alone NVDLA 
+6) Integrate the NVDLA RTL into your SoC.  The sanity tests that are run in the stand-alone NVDLA 
    testbench can also be run at the SoC level and used to validate the integration.  
    See :ref:`test_format`.
 
@@ -185,6 +189,98 @@ In current release, NVDLA has implemented one signal named test_mode to enable D
        the functional and DFT reset signals.
      - Should connect to the system DFT controller as needed.  Otherwise, tie to 0.
 
+.. _env_setup:
+
+Environment Setup
+=================
+The Verilog code included in this release is parameterized such that multiple configurations
+can be generated from a single source.  A hardware tree build is needed to generate the final
+Verilog RTL code for a given configuration.  The tools required for this build are outlined 
+below.  The versions listed are used for testing.
+
+* Java - jdk1.7
+* Perl - perl-5.10
+    - XML::Simple
+    - Capture::Tiny
+* CPP - gcc-4.9.3
+* Python - python2.6
+* SystemC - systemc-2.3.0
+* (for Verilator builds) Verilator - Verilator 3.912
+* (for Verilator builds) clang - clang 3.4
+
+.. warning::
+  NVDLA requires the exact SystemC version specified (2.3.0).  Despite the
+  subminor version change, 2.3.1 and 2.3.2 have compatibility issues with
+  NVDLA, including issues with hierarchical binding, and the NVDLA Cmodel
+  will fail at runtime when compiled with those versions.
+
+.. _tree_build:
+
+Tree Build
+==========
+
+The NVDLA repository supports the build of multiple configurations based on a feature
+specification file.  Each configuration of the NVDLA is defined by a spec file in
+he hw/spec/defs directory.  The filename is the name of the configuration with a ".spec"
+exension.  For the configurable release, there are currently two spec files included: "nv_large" which has 2048 INT8 MAC's,
+and "nv_small" which has 64 INT8 MAC's plus some other reductions; the non-configurable
+release has a single spec file, "nv_full", which has 2048 multi-precision MAC units.
+
+The file hw/tree.make specifies a list of configurations to build, as well as paths to tools
+required for building the configured RTL.  To create an initial version of this file, run the
+following command::
+
+ cd hw
+ make
+
+This command will prompt for the configuration and tool locations.  It will create a tree.make
+file in the hw directory containing the appropriate configuration and tool setup.  
+For subsequent changes the tree.make file can be edited directory with a text editor.  Once
+tree.make setup is complete, the RTL can be built::
+
+ cd hw
+ ./tools/bin/tmake -build vmod
+
+The tmake program can also be used to launch a set of short sanity simulations.  Once you've
+set up the simulation environment according to the testbench section of this 
+document :ref:`testbench`, the following command can be used to launch the short sanity 
+regression::
+
+ ./tools/bin/tmake -build verif_sim
+
+Additionally, there is a tmake target for the Cmodel of NVDLA, which lives
+in the ``cmod/`` directory.  If building the Virtual Platform, or another
+application that uses the NVDLA Cmodel, the following command will build it
+and install it into ``outdir/nv_full/cmod/release``:
+
+ ./tools/bin/tmake -build cmod_top
+
+Version control usage
+---------------------
+
+NVDLA is developed in Git, on multiple branches.  It is important to use the
+correct branch to track the development work that is desired.  Currently,
+the following two branches exist:
+
+* ``nvdlav1``: This is the default branch for any new clones of the NVDLA
+  repository from November 21st, 2017, on.  The ``nvdlav1`` branch contains
+  sustaining support work around the non-configurable, full-precision
+  version of NVDLAv1 ("nv_full").  New RTL features will not be added to the
+  ``nvdlav1`` branch, though bug fixes may appear, as may new verification
+  features.  Users who desire a stable version of NVDLA may prefer to choose
+  the ``nvdlav1`` branch.
+
+* ``master``: This branch contains ongoing development work on the NVDLA
+  RTL, including work towards multiple configurations and additional feature
+  development.  This branch is expected to pass "sanity" tests, but may not
+  always be tapeout-quality.  Infrastructure in this branch may change
+  rapidly.  Users who desire the most up-to-date view of NVDLA development
+  may prefer to choose the ``master`` branch.  The ``master`` branch was the
+  default for clones made before November 21st, 2017.
+
+Note that the ``nvdlav1`` branch's history will diverge from the ``master``
+branch; the ``master`` branch will not be a strict superset of the
+``nvdlav1`` branch.
 
 .. _performance_model:
 
@@ -220,11 +316,19 @@ For best QOR, the EDA vendor supplied versions should be used for both synthesis
 and simulation if possible.  They can be obtained directly from the EDA vendors.
 
 If no designware implementation is available, the NVDLA repository contains
-an implementation with an NV\_ prefix to the filename and module name.  These files
-are in the hw/vlib directory.  The design can be switched to using the NV\_ version
-of the files by setting the Verilog define macro DESIGNWARE_NOEXIST to 1.  However, 
-these NV\_ versions should not be used currently for any tapeout.
+an implementation with an NV\_ prefix to the filename and module name. 
+These files are in the hw/vlib directory.  The design can be switched to
+using the NV\_ version of the files by setting the Verilog define macro
+DESIGNWARE_NOEXIST to 1; similarly, the environment variable
+DESIGNWARE_NOEXIST will enable this in the simulation build environment. 
+However, these NV\_ versions should not be used currently for any tapeout.
 
+.. warning::
+  Be careful to set the DESIGNWARE_NOEXIST variable the same way for
+  simulation as for synthesis.  The NV\_ variations are believed to be
+  correct, but are not verified to the same degree as DesignWare components
+  are; simulating different RTL than is synthesized can result in unexpected
+  defects in a tapeout netlist.
 
 Library Cells
 =============
@@ -467,9 +571,9 @@ The release directory structure for synthesis is shown below::
            |--- NV_NVDLA_partition_o.sdc
            `--- NV_NVDLA_partition_p.sdc          
 
-NV_NVDLA_partition_* are synthesis “TOP_NAMES” - The designs will be compiled at this 
+``NV_NVDLA_partition_*`` are synthesis **“TOP_NAMES”** - The designs will be compiled at this 
 hierarchy, and netlists will be generated for these designs. These are independent 
-sub-designs for synthesis. 
+sub-designs for synthesis, which are instantiated in a top-level wrapper. 
 
 Requirements
 ------------
@@ -495,35 +599,41 @@ variables, meanings and defaults.
 
    * - Variable
      - Comments
-   * - NVDLA_ROOT
-     - Location on disk for the NVDLA source. 
-   * - TOP_NAMES
+   * - ``NVDLA_ROOT``
+     - Location on disk for the NVDLA source "hw" directory.  
+   * - ``TOP_NAMES``
      - Space separated list of TOP_NAMES to synthesize. You may choose to synthesize all or a subset of TOP_NAMES. 
        Defaults to  
        “NV_NVDLA_partition_a NV_NVDLA_partition_c NV_NVDLA_partition_o NV_NVDLA_partition_m NV_NVDLA_partition_p”
-   * - RTL_SEARCH_PATH
+   * - ``RTL_SEARCH_PATH``
      - Space separated list of search paths (directories) for locating all the pieces of RTL. 
-       Defaults to an empty string. 
-   * - RTL_INCLUDE_SEARCH_PATH
+       Defaults to an empty string.
+       Please do not include paths to non synthesizable (behavioral) RAM models, like the ones in ``${NVDLA_ROOT}/vmod/rams/model``
+   * - ``RTL_INCLUDE_SEARCH_PATH``
      - Space separated list of search paths (directories) for locating all the supplementary Verilog include files. 
        Defaults to an empty string. 
-   * - EXTRA_RTL
+   * - ``EXTRA_RTL``
      - List of files to read in, apart from the modules that can be found in the search paths. 
        Defaults to an empty string. 
-   * - RTL_EXTENSIONS
+   * - ``RTL_EXTENSIONS``
      - List of extensions for the source RTL files.
        Defaults to “.v .sv .gv”
-   * - RTL_INCLUDE_EXTENSIONS
+   * - ``RTL_INCLUDE_EXTENSIONS``
      - List of extensions for supplementary Verilog include files. Defaults to “.vh .svh”
-   * - DEF
+   * - ``DEF``
      - Path to directory containing floorplans in the “DEF” format. Files should be named by the TOP_NAMES, with the extension “.def”
        This variable defaults to a directory called  “def” in the current directory
-   * - CONS
+       
+       We do not provide templates, because it depends on the process node, and the memory compiler being used. 
+   * - ``CONS``
      - Path to directory containing constraints in the “SDC” format. 
        Files should be named by the TOP_NAMES, with the extension “.sdc”
        This directory may also contain “<TOP_NAME>.tcl” to specify any non-SDC constraints to guide synthesis. 
        All of these constraints are sourced before compiling the design. 
-       This variable defaults to a directory called “cons” in the current directory
+       This variable defaults to a directory called “cons” in the current directory.
+      
+       We provide template SDCs for all logical partitions in the `${NVDLA_ROOT}/syn/cons` directory including
+       clock constraints etc. You may provide your own constraints, based on the process node you are targeting. 
 
 |
 |
@@ -535,7 +645,7 @@ variables, meanings and defaults.
 
    * - Variable
      - Comments
-   * - DC_PATH
+   * - ``DC_PATH``
      - Location of the Design Compiler installation. 
        Defaults to an empty string
 
@@ -549,57 +659,57 @@ variables, meanings and defaults.
 
    * - Variable
      - Comments
-   * - TARGET_LIB
+   * - ``TARGET_LIB``
      - Path to a single standard cell library that will be used to map the design to (the “target” library). 
        Defaults to an empty string. 
-   * - LINK_LIB
+   * - ``LINK_LIB``
      - Path to all the libraries that are required to link the design. 
        This should include the target library as well.
-       Include any RAM compiler libraries here. 
+       Include any RAM compiler timing libraries here. 
        Defaults to an empty string. 
-   * - TF_FILE
+   * - ``TF_FILE``
      - Path to the “Milkyway Technology File” that is used to create the Milkyway models for the physical library.
        Please check with your standard cell library vendor for the right file to use.
        Defaults to an empty string. 
        Required for DC-Topographical
-   * - TLUPLUS_FILE
+   * - ``TLUPLUS_FILE``
      - Path to the “TLUPlus” files that will be used for RC extraction
        Please check with your standard cell library vendor for the right file to use.
        Defaults to an empty string. 
        Required for DC-Topographical
-   * - TLUPLUS_MAPPING_FILE
+   * - ``TLUPLUS_MAPPING_FILE``
      - Path to the “Tech2ITF” mapping file, that maps layer names from between the Milkyway Tech file and the interconnect technology format file. 
        Please check with your standard cell library vendor for the right file to use. 
        Defaults to an empty string. 
        Required for DC-Topographical
-   * - MIN_ROUTING_LAYER
+   * - ``MIN_ROUTING_LAYER``
      - Bottom routing layer for signal nets. 
        Please check with place-and-route methodology for the right value. 
        Defaults to an empty string. 
        Required for DC-Topographical
-   * - MAX_ROUTING_LAYER
+   * - ``MAX_ROUTING_LAYER``
      - Top routing layer for signal nets.
        Please check with place-and-route methodology for the right value. 
        Defaults to an empty string. 
        Required for DC-Topographical
-   * - HORIZONTAL_LAYERS
+   * - ``HORIZONTAL_LAYERS``
      - Space separated list of layers with preferred horizontal routing.
        Defaults to an empty string. 
-   * - VERTICAL_LAYERS
+   * - ``VERTICAL_LAYERS``
      - Space separated list of layers with preferred vertical routing.
        Defaults to an empty string. 
-   * - DONT_USE_LIST
+   * - ``DONT_USE_LIST``
      - Space separated list of regular expressions for cells that you do not wish to map your design to. 
        A “dont_use” will be applied on these cells in Design Compiler. 
        Defaults to an empty string. 
-   * - WIRELOAD_MODEL_FILE
+   * - ``WIRELOAD_MODEL_FILE``
      - A file containing a “wireload model” - a lookup table for resistance and capacitance calculation based on fanout. 
        Refer to the lcug16_Defining_Wire_Load_Groups.htm on the Synopsys Solvnet site
        for more information regarding wire load modeling. 
        Not required if your standard cell library contains the wireload models built in. 
        Not required for DC-Topographical. 
        Defaults to an empty string.
-   * - WIRELOAD_MODEL_NAME
+   * - ``WIRELOAD_MODEL_NAME``
      - Name of the wireload model lookup table (if you have multiple tables) 
        Not required for DC-Topographical.
        Defaults to an empty string. 
@@ -608,31 +718,38 @@ variables, meanings and defaults.
 |
 |
 
+.. warning::
+  We do not supply timing models or synthesizable RTL for the RAMs in the design. 
+  These need to be provided by the user for the process node/ memory compiler being used. 
+  
+  Please DO NOT include ``${NVDLA_ROOT}/vmod/rams/model`` in the RTL_SEARCH_PATH - They are simulation models, not synthesizable.
+
+
 .. list-table:: Miscellaneous Options
    :widths: 10 30
    :header-rows: 1
 
    * - Variable
      - Comments
-   * - TIGHTEN_CGE
+   * - ``TIGHTEN_CGE``
      - Boolean, “1” to enable over constraining the CG-Enable paths. See section 5.5.2 below
        Default is set to “0”
-   * - CGLUT_FILE
+   * - ``CGLUT_FILE``
      - File containing the fanout-based CG over constraint lookup table to pessimize the CG enable paths. See section 5.5.2 below.
-       Please see “<NVDLA_RELASE>/syn/dc/templates/cg_latency_lut.tcl” for an example.
+       Please see “${NVDLA_ROOT}/syn/templates/cg_latency_lut.tcl” for an example.
        Defaults to an empty string. 
-   * - DC_NUM_CORES
+   * - ``DC_NUM_CORES``
      - The number of CPU cores available for Design Compiler.
        Defaults to ‘1’ 
        Note: Single CPU core synthesis may see a long overall runtime. 
-   * - AREA_RECOVERY
+   * - ``AREA_RECOVERY``
      - Boolean, “1” to Run quick area optimization by undoing some optimizations on paths with positive slack. 
        Defaults to “1”.
-   * - INCREMENTAL_RECOMPILE_COUNT
+   * - ``INCREMENTAL_RECOMPILE_COUNT``
      - Number of rounds of incremental compiles  to run in Design Compiler. 
        Defaults to “1” - This amounts to 2 rounds of compile, one for mapping - the “main” compile 
        and one for incremental optimization - the “incremental” compile.
-   * - COMMAND_PREFIX
+   * - ``COMMAND_PREFIX``
      - String. 
        Defaults to an empty string. 
        This will be pre-fixed to the dc_shell command . 
@@ -653,20 +770,20 @@ Clock Constraints
 ^^^^^^^^^^^^^^^^^
 
 The clock constraints are provided through an SDC file. 
-You will find reference constraints in “<NVDLA_RELEASE>/syn/dc/cons/NV_NVDLA_partition*.sdc”. 
+You will find reference constraints in “${NVDLA_ROOT}/syn/cons/NV_NVDLA_partition*.sdc”. 
 These contain clock targets for the 16nm process. You will need to scale the clock 
 constraints to the target process/synthesis corner as appropriate. 
 The SDC files also contain some timing exceptions (false paths) as well.
 Please populate the SDC files for all TOP_NAMES in a single directory, and set the CONS variable 
 in the configuration file described in the previous section.
 
-You can also add additional non-SDC constraints, like specific clock gating styles, etc. in <CONS>/NV_NVDLA_partition*.tcl
+You can also add additional non-SDC constraints, like, for example, specific clock gating styles, etc. in <CONS>/NV_NVDLA_partition*.tcl
 
 Clock Gate Enable Path Over constraining
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The flow allows for over constraining the CG enable paths to pessimize synthesis to take into account post-CTS latencies. 
-This is achieved through a fanout-based lookup table in TCL syntax. See “<NVDLA_RELEASE>/syn/dc/templates/cg_latency_lut.tcl” for an example. 
+This is achieved through a fanout-based lookup table in TCL syntax. See “${NVDLA_ROOT}/syn/templates/cg_latency_lut.tcl” for an example. 
 Provide the path to this file as the CGLUT_FILE variable in the configuration file.
 To enable the over constraining, please set TIGHTEN_CGE variable to 1 in the configuration file.
 
@@ -683,7 +800,7 @@ You can also provide constraints in TCL syntax, through “<CONS>/NV_NVDLA_parti
 Running synthesis
 -----------------
 
-You can run synthesis using the “<NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh” bash script. 
+You can run synthesis using the “${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh” bash script. 
 The supported arguments to the scripts are in table below.
 
 |
@@ -694,23 +811,23 @@ The supported arguments to the scripts are in table below.
 
    * - Argument
      - Explanation
-   * - -config
+   * - ``-config``
      - Path to the synthesis configuration file (see section 5.4)
        If not provided, the flow will look for a file called “config.sh” in the current directory. 
-   * - -mode
+   * - ``-mode``
      - Specifies which tool to use for synthesis. Use one of the following::
 
         “wlm” => Use Design Compiler (non-topographical) for wireload model based synthesis (non-physical)
         “dct” => Use DC-Topographical
         “dcg” => Use DC-Graphical along with “-spg” in the compile command. 
         “de”  => Use DC Explorer for synthesis.
-   * - -build
+   * - ``-build``
      - Sandbox of synthesis. Optional. 
-       Defaults to “osdla_syn_<timestamp>”
-   * - -modules
+       Defaults to “``nvdla_syn_<timestamp>``”
+   * - ``-modules``
      - Space separated list of modules to run synthesis on / restore database for. 
        If not specified, the TOP_NAMES must be populated in the configuration file.
-   * - -restore
+   * - ``-restore``
      - Path to design database (in DDC format) to restore.
        
 
@@ -722,7 +839,7 @@ Running Non-physical synthesis (Wireload Models)
 
 You can run::
 
-    <NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh -mode wlm -config /path/to/config.sh
+    ${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh -mode wlm -config /path/to/config.sh
 
 You will need to have a wire load model defined in your standard cell library, or in a 
 separate file (in liberty syntax, as described in the lcug16_Defining_Wire_Load_Groups.htm 
@@ -745,9 +862,9 @@ Running physical synthesis
 
 You can run one of the following, To pick DC-Topographical/DC-Graphical/DC Explorer::
 
-    <NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh -mode dct -config /path/to/config.sh
-    <NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh -mode dcg -config /path/to/config.sh
-    <NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh -mode de -config /path/to/config.sh
+    ${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh -mode dct -config /path/to/config.sh
+    ${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh -mode dcg -config /path/to/config.sh
+    ${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh -mode de -config /path/to/config.sh
 
 In the configuration file, the following variables are required to be defined::
 
@@ -772,7 +889,7 @@ Restoring a design database
 
 You can run one of the following, To restore a design database from a previous synthesis run with the reference methodology::
 
-    <NVDLA_RELEASE>/syn/dc/scripts/syn_launch.sh -mode <mode_used_for_synthesis> -config /path/to/config.sh -build <build_tag_used_for_synthesis> -restore /path/to/build/db/<module>.ddc -modules <module>
+    ${NVDLA_ROOT}/syn/dc/scripts/syn_launch.sh -mode <mode_used_for_synthesis> -config /path/to/config.sh -build <build_tag_used_for_synthesis> -restore /path/to/build/db/<module>.ddc -modules <module>
 
 
 Synthesis outputs
@@ -798,7 +915,7 @@ In the synthesis sandbox, the following outputs are generated::
                         (Detailed timing/QoR information)
                         (There are also reports generated at intermediate stages)
 
-
+.. _testbench:
 
 Testbench & Traces
 ==================
@@ -813,18 +930,34 @@ playing back the trace and responding to NVDLA interrupts.  The trace format is 
 Tests
 -----
 
-The NVDLA repository contains four basic sanity tests, and one convolution test.  Additional tests
-will be added soon.  
+The NVDLA repository contains seven basic sanity tests, and two layer tests.  Additional tests will be added periodically.
 
-* Sanity0, Sanity1, and Sanity2  
+Basic sanity tests
+------------------
 
-  Basic sanity tests
+* sanity0 - basic register write and compare read-back value
+* sanity1 - memory copy test using bdma (dbb to dbb), test ends using register polling
+* sanity2 - sanity1 waiting on interrupts instead of register polling
+* sanity3 - convolution test, test ends using register polling and compares output mem region to determine passing
+* sanity3_cvsram - convolution test, uses cvsram path instead of dbb, test ends using register polling and compares output mem region to determine passing
+
+Short single function tests using dbb
+-------------------------------------
 
 * conv_8x8_fc_int16
+* pdp_max_pooling_int16
+* sdp_relu_int16
+
+Long layer tests
+----------------
+
+* googlenet_conv2_3x3_int16 - uses cvsram, 30 min runtime
+* cc_alexnet_conv5_relu5_int16_dtest_cvsram - uses cvsram, 156 min runtime
  
-  Short convolution test.  Utilizes the MAC and Accumulator datapaths.
+The long layer tests are not in the regress target. Run using
 
-
+* make run TESTDIR=../traces/traceplayer/googlenet_conv2_3x3_int16
+* make run TESTDIR=../traces/traceplayer/cc_alexnet_conv5_relu5_int16_dtest_cvsram
 
 .. _test_format:
 
@@ -834,13 +967,16 @@ Test Format
 Tests will be in trace form and will support seven commands:  cpu read/write, memory read/write, 
 memory load/dump, and interrupt wait. 
 
-CPU Read/Write Commands
-^^^^^^^^^^^^^^^^^^^^^^^
+Tests read in input.txn in what we call "trace" format which is a file containing a list of 
+register and memory accesses that will be used by the test before finishing the simulation. The script in synth_tb/sim_scripts/inp_txn_to_hexdump.pl reads input.txn and outputs input.txn.raw containing encodings for the csb master sequencer to read and execute from.
 
-The main test trace performs cpu register reads/writes to the NVDLA IP.  These commands
+Hardware Config Read/Write Commands
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The main test trace performs register reads/writes to the NVDLA IP.  These commands
 will cause reads and write commands to the CSB programming bus.
 
-CPU read and write Commands are listed in the following table.
+Reg read and write Commands are listed in the following table.
 
 .. list-table::
    :widths: 20 30
@@ -848,14 +984,28 @@ CPU read and write Commands are listed in the following table.
 
    * - Command
      - Description
-   * - write_reg <addr:32> <data:32> 
-     - Execute a 32b data write to a 32b addr
-   * - read_reg <addr:32> <bitmask:32> <expectedData:32>
-     - Execute a polling read to 32b addr and poll until 32b expectedData is met.  
+   * - write_reg <misc:16><addr:16> <data:32> 
+     - Execute a 32b data write to a 16b addr.
+
+       addr is calculated from 
+       (documented register address - NVDLA_GLB.S_NVDLA_HW_VERSION_0.offset) >> 2.
+       Left shift by 2 because hardware expects the word address.
+
+       Bit 1 of misc (bit 17 of 32b field) means CSB master will wait for wr_complete or error
+       before sending next read or write.
+       Bit 0 of misc (bit 16 of 32b field) is 1 for writes and 0 for reads.
+
+       inp_txn_to_hexdump.pl will correct the rd/wr bit based on read_reg/write_reg cmd.
+       Examples::
+
+         write_reg 0x00030200 0x1234c0de //Wait for wr_complete or error
+         write_reg 0x00010200 0x1234da7a //Don't wait for wr_complete or error
+   * - read_reg <misc:16><addr:16> <bitmask:32> <expectedData:32>
+     - Execute a polling read to 16b addr and poll until (returnData & bitmask) == expectedData.
        Number of polls will be equal to  +read_reg_poll_retries (default 50).
        Examples::
 
-         read_reg 0x27000200 0xffffffff 0x00000000
+         read_reg  0x00000200 0xffffffff 0x1234da7a //0x0020 read back should be 0x1234da7a
 
 
 Memory Read/Write Commands
@@ -871,10 +1021,10 @@ Memory read and write Commands are listed in the following table.
 
    * - Command
      - Description
-   * - write_mem <addr:40> <bytemask:16> <wdata:128>
-     - Execute a 128b data write with corresponding 16 byte mask to 40b addr.
-   * - read_mem <addr:40> <bitmask:128> <expectedData:128>
-     - Execute a polling read to 40b addr and poll until 128b expectedData is met.  
+   * - write_mem <addr:64> <bytemask:16> <wdata:128>
+     - Execute a 128b data write with corresponding 16 byte mask to 64b addr.
+   * - read_mem <addr:64> <bitmask:128> <expectedData:128>
+     - Execute a polling read to 64b addr and poll until 128b expectedData is met.  
        Number of polls will be equal to  +read_mem_poll_retries (default 50).
        Example::
 
@@ -892,10 +1042,10 @@ To further accelerate simulation, the trace supports loading and dumping of memo
 
    * - Command
      - Description
-   * - load_mem <addr:40> <num_bytes:32> <string>
-     - Use Verilog $readmemh() to load memory with 32b num_bytes at 40b addr from file, “string”.
-   * - dump_mem <addr:40> <num_bytes:32> <string>
-     - Use Verilog $writememh() to dump 32b num_bytes at 40b addr of memory to file, “string”.
+   * - load_mem <addr:64> <num_bytes:32> <string>
+     - Use Verilog $readmemh() to load memory with 32b num_bytes at 64b addr from file, “string”.
+   * - dump_mem <addr:64> <num_bytes:32> <string>
+     - Use Verilog $writememh() to dump 32b num_bytes at 64b addr of memory to file, “string”.
 
 
 Interrupt Wait Command
@@ -932,8 +1082,12 @@ The memory write, load, and dump commands occur in zero simulation time.  The po
 DBBIF Slave Agent
 ^^^^^^^^^^^^^^^^^
 
-The DBBIF slave agent captures DBBIF memory transactions and issues reads and writes to memory.  The NVDLA and environment supports two slave agents, each 16B/clk.
+The DBBIF slave agent captures DBBIF memory transactions and issues reads and writes to memory.  The NVDLA and environment supports one slave agent per memory region, 16B/clk.
 
+CVSRAM Slave Agent
+^^^^^^^^^^^^^^^^^^
+
+The CVSRAM slave agent captures CVSRAM memory transactions and issues reads and writes to a section of memory logically separate from DBB.  The NVDLA and environment supports one slave agent per memory region, 16B/clk.
 
 Memory Stub
 ^^^^^^^^^^^
@@ -982,7 +1136,7 @@ The make targets are described below.
 
   Examples command lines::
    make run DUMP=1 TESTDIR=../traces/traceplayer/sanity0
-   make run DUMP=0 TESTDIR=../traces/first_release/conv_8x8_fc_int16
+   make run DUMP=0 TESTDIR=../traces/traceplayer/conv_8x8_fc_int16
 
   All packaged tests will be found in the verif/traces/* directories.  Within each test directory there is 
   an ‘input.txn’ file which is a list of the input transactions executed against the DUT.
@@ -1281,3 +1435,65 @@ Runtime Configuration
        +max_wr_outstanding_per_channel limits the number of write transactions that are allowed to be outstanding per channel at any moment of time.  The default value is 128.
 
 
+.. _verilator_testbench:
+
+Verilator Testbench
+-------------------
+
+On an experimental basis, the NVDLA release now contains a limited
+Verilator-based testbench, enabling the NVDLA RTL to be built and tested
+entirely without non-commercial software.  The Verilator testbench is
+expected to work, and is validated against the existing traces, but does not
+carry the same level of testing as the SystemVerilog testbench does when
+simulated by VCS.
+
+Setting up
+^^^^^^^^^^
+
+The ``tree.make`` file needs some changes to build with Verilator; in
+particular, the ``VERILATOR`` and ``CLANG`` environment variables need to be
+set.  (The Verilated testbench cannot be built with GCC, because the
+generated C++ source is too big.)  Additionally, ensure that your system has
+enough memory to build the testbench; depending on your version of
+Verilator, you will need a 64-bit system with up to 20GB of RAM (some cases
+have been noted in which the requirements are even higher).
+
+Once the ``tree.make`` file has been updated, you can use ``tmake`` to build
+the simulator::
+
+  ./tools/bin/tmake -build verilator
+
+The ``verif/verilator`` directory contains a Makefile that contains
+additional options for building the simulator.  For instance, if you need to
+dump a ``.vcd`` waveform from the Verilated simulator, you may wish to
+uncomment the line that enables tracing; such traces can be viewed using
+``gtkwave`` (or with more advanced EDA tools of your choice, including
+Verdi).
+
+Running a test
+^^^^^^^^^^^^^^
+
+The Verilated simulation can be run by ``cd``ing into ``verif/verilator``,
+and running a command like::
+
+  make run TEST=sanity0
+
+This will build the simulator (if it has not already been built), compile a
+test to the binary test format needed for the Verilator simulator
+infrastructure, and then finally run the test through the compiled NVDLA
+model.  On an Intel Core i5-6500, the ``googlenet_conv2_3x3_int16`` test
+runs about 98,000 cycles in about 8 minutes.
+
+The Verilated testbench is compatible with all of the traces that are in the
+``traceplayer`` directory.
+
+Testbench design
+^^^^^^^^^^^^^^^^
+
+The Verilator testbench is implemented in the ``verif/verilator/nvdla.cpp``
+file.  It instantiates one instance of the ``VNV_nvdla`` module, and wires
+up the CSB interface to a simulated stimulus, and each of the memory
+interfaces to simulated responders.  The timing of the trace is managed by
+the simulated CSB master, and the main loop handles "external events" (i.e.,
+non-CSB events, such as waiting for an interrupt, or loading data into or
+checking data from a simulated AXI memory).  
